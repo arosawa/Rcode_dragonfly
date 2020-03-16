@@ -1,0 +1,103 @@
+########## 20200311 トンボのネスト構造解析 ###########
+
+d1990 <- read.csv("d1990.csv")
+d1990 <- d1990[,-2] # 年を消して重複をなくす
+d1990 <- unique(d1990)
+
+d1996 <- read.csv("d1996.csv")
+d1996 <- d1996[,-2] # 年を消して重複をなくす
+d1996 <- unique(d1996)
+
+
+###
+ryusui <- read.csv("select_futahashi.csv") # 水田に関係なさそうな流水性を抜き出す
+
+d1990 <- merge(d1990,ryusui)
+d1990 <- d1990[d1990$ryuusui == 0,]
+
+d1996 <- merge(d1996,ryusui)
+d1996 <- d1996[d1996$ryuusui == 0,]
+
+
+### 共通種数の算出
+source("kansu.txt")
+
+com <- common_sp(d1990,d1996)
+
+
+#### モデリング
+
+env <- read.csv("paddy.csv")
+agr <- read.csv("toyama_cons5km.csv")
+houki <- read.csv("houki_res.csv")
+data <- merge(com,env)
+data <- merge(data,agr)
+data <- merge(data,houki)
+
+test <- glm(num_common ~ MAX + PADDY + SUM,offset(data$num_past),data=data,family=poisson)
+
+data$MAX <- data$MAX + 0.01
+data$SUM <- data$SUM + 0.01
+#data$PADDY <- data$PADDY + 0.01
+#data$cons <- data$cons + 0.01
+test1 <- glm(num_common ~ cons + PADDY + log(SUM),offset(data$num_past),data=data,family=poisson)
+
+test2 <- glm(num_common ~ cons + houki2005 + PADDY + log(SUM),offset(data$num_past),data=data,family=poisson)
+
+test3 <- glm(num_common ~ cons + PADDY + log(SUM),offset(data$num_past),data=data,family=poisson)
+test4 <- glm(num_common ~ PADDY + log(SUM),offset(data$num_past),data=data,family=poisson)
+
+library(car)
+vif(test3)
+vif(test4)
+
+
+################# glmmML
+library(glmmML)
+test2 <- glmmML(num_common ~ log(MAX) + log(PADDY),offset(data$num_past),cluster=mesh5km,data=data,family=poisson,start.sigma=0.01)
+test3 <- glmmML(num_common ~ log(MAX) + log(SUM) + PADDY,offset(data$num_past),cluster=mesh5km,data=data,family=poisson,start.sigma=0.01)
+
+test4 <- glmmML(num_common ~ log(SUM) + PADDY,offset(data$num_past),cluster=mesh5km,data=data,family=poisson,start.sigma=0.01)
+
+
+Call:  glmmML(formula = num_common ~ log(SUM) + PADDY, family = poisson,      data = data, cluster = mesh5km, weights = offset(data$num_past),      start.sigma = 0.01) 
+
+
+                  coef  se(coef)      z Pr(>|z|)
+(Intercept)  2.9506660 0.6227315  4.738 2.16e-06
+log(SUM)     0.1992936 0.0907467  2.196 2.81e-02
+PADDY       -0.0006334 0.0008772 -0.722 4.70e-01
+
+Scale parameter in mixing distribution:  2.909 gaussian 
+Std. Error:                              0.1392 
+
+        LR p-value for H_0: sigma = 0:  0 
+
+Residual deviance: 945.8 on 10164 degrees of freedom    AIC: 953.8 
+
+
+#####
+test5 <- glmmML(num_common ~ cons + log(SUM) + PADDY,offset(data$num_past),cluster=mesh5km,data=data,family=poisson,start.sigma=0.001)
+
+Call:  glmmML(formula = num_common ~ cons + log(SUM) + PADDY, family = poisson,      data = data, cluster = mesh5km, weights = offset(data$num_past),      start.sigma = 0.001) 
+
+
+                  coef  se(coef)          z Pr(>|z|)
+(Intercept)  2.951e+00 6.227e-01  4.738e+00 2.16e-06
+cons        -1.413e-13 2.209e-07 -6.400e-07 1.00e+00
+log(SUM)     1.993e-01 9.075e-02  2.196e+00 2.81e-02
+PADDY       -6.334e-04 8.772e-04 -7.220e-01 4.70e-01
+
+Scale parameter in mixing distribution:  2.909 gaussian 
+Std. Error:                              0.1392 
+
+        LR p-value for H_0: sigma = 0:  0 
+
+Residual deviance: 945.8 on 10163 degrees of freedom    AIC: 955.8 
+
+
+
+##
+test6 <- glmmML(num_common ~ cons + houki2005 + log(SUM) + PADDY,offset(data$num_past),cluster=mesh5km,data=data,family=poisson,start.sigma=0.05)
+
+
